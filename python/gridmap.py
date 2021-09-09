@@ -4,7 +4,7 @@ import cv2
 
 
 def cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap, cell_size, car_x, car_y, car_yaw):
-    rot = np.deg2rad(car_yaw)
+    rot = car_yaw
     rotMat = np.array([[np.cos(rot), - np.sin(rot)],
                        [np.sin(rot), np.cos(rot)]])
 
@@ -14,6 +14,15 @@ def cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap, cell_size, car_x, c
     pos_world = np.matmul(rotMat, np.array([x_local, y_local]).transpose()) + np.array([car_x, car_y]).transpose()
 
     pos_world_pixels = np.divide(pos_world, cell_size) + np.array([gridmap.shape[0] / 2, gridmap.shape[1] / 2]).transpose()
+
+    return pos_world_pixels[0], pos_world_pixels[1]
+
+
+def rotated_cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap, cell_size, car_x, car_y, car_yaw):
+    x_world = (x_idx - 250) * 0.25 + car_x
+    y_world = (y_idx - 250) * 0.25 * (-1) + car_y
+
+    pos_world_pixels = np.divide(np.array([x_world, y_world]).transpose(), cell_size) + np.array([gridmap.shape[0] / 2, gridmap.shape[1] / 2]).transpose()
 
     return pos_world_pixels[0], pos_world_pixels[1]
 

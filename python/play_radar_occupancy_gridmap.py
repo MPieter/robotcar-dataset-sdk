@@ -88,8 +88,9 @@ for radar_timestamp in radar_timestamps:
     car_y = (radar_odometry.iloc[idx].y_abs - car_y_init)  # meters (idem)
     car_yaw = radar_odometry.iloc[idx].yaw_abs - car_yaw_init
 
-    updateGridMap(gridmap, cell_size, k, car_x, car_y, car_yaw, cart_img)
+    updateGridMap(gridmap, cell_size, k, car_x, car_y, car_yaw, np.flipud(cart_img))
     pgridmap = convertToProbabilities(gridmap)
+    pgridmap = np.flipud(pgridmap)
     resized = cv2.resize(pgridmap, (500, 500), interpolation=cv2.INTER_AREA)
     cv2.imshow("Occupancy gridmap", resized)
     cv2.waitKey(1)
