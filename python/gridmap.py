@@ -1,21 +1,55 @@
 import numpy as np
+from scipy import ndimage
+import cv2
+
+
+def cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap, cell_size, car_x, car_y, car_yaw):
+    rot = np.deg2rad(car_yaw)
+    rotMat = np.array([[np.cos(rot), - np.sin(rot)],
+                       [np.sin(rot), np.cos(rot)]])
+
+    x_local = (x_idx - 250) / 4  # position in meters in local frame
+    y_local = (y_idx - 250) / 4
+
+    pos_world = np.matmul(rotMat, np.array([x_local, y_local]).transpose()) + np.array([car_x, car_y]).transpose()
+
+    pos_world_pixels = np.divide(pos_world, cell_size) + np.array([gridmap.shape[0] / 2, gridmap.shape[1] / 2]).transpose()
+
+    return pos_world_pixels[0], pos_world_pixels[1]
 
 
 def updateGridMap(gridmap, cell_size, k, car_x, car_y, car_yaw, cart_img):
-    rot = np.deg2rad(car_yaw)
-    for i in range(gridmap.shape[0]):
-        for j in range(gridmap.shape[1]):
+    cart_img_rotated = ndimage.rotate(cart_img, np.rad2deg(car_yaw), reshape=False)
+    print(car_yaw)
+    cv2.imshow("Cart img rotated", cart_img_rotated)
+    cv2.waitKey(1)
+
+    # rot = np.deg2rad(car_yaw)
+    rot = car_yaw
+
+    idx_x_00, idx_y_00 = cart_img_point_to_world_idx_point(0, 0, gridmap, cell_size, car_x, car_y, car_yaw)
+    idx_x_11, idx_y_11 = cart_img_point_to_world_idx_point(cart_img.shape[0], cart_img.shape[1], gridmap, cell_size, car_x, car_y, car_yaw)
+    idx_x_01, idx_y_01 = cart_img_point_to_world_idx_point(0, cart_img.shape[1], gridmap, cell_size, car_x, car_y, car_yaw)
+    idx_x_10, idx_y_10 = cart_img_point_to_world_idx_point(cart_img.shape[0], 0, gridmap, cell_size, car_x, car_y, car_yaw)
+
+    idx_x_low = np.floor(np.min([idx_x_00, idx_x_11, idx_x_10, idx_x_01])).astype(int)
+    idx_y_low = np.floor(np.min([idx_y_00, idx_y_11, idx_y_10, idx_y_01])).astype(int)
+    idx_x_high = np.ceil(np.max([idx_x_00, idx_x_11, idx_x_10, idx_x_01])).astype(int)
+    idx_y_high = np.ceil(np.max([idx_y_00, idx_y_11, idx_y_10, idx_y_01])).astype(int)
+
+    for i in range(idx_x_low, idx_x_high):
+        for j in range(idx_y_low, idx_y_high):
             # Find RCS value for this point
             x_pos_world_cell_center = (i - gridmap.shape[0] / 2) * cell_size
             y_pos_world_cell_center = (j - gridmap.shape[1] / 2) * cell_size
-            # x_pos_local = x_pos_world_cell_center - car_x  # TODO take into account rotation of vehicle
-            # y_pos_local = y_pos_world_cell_center - car_y
+            x_pos_local = x_pos_world_cell_center - car_x  # TODO take into account rotation of vehicle
+            y_pos_local = y_pos_world_cell_center - car_y
 
             rotMat = np.array([[np.cos(rot), - np.sin(rot)],
                                [np.sin(rot), np.cos(rot)]])
 
-            # pos_local_rotated = np.matmul(rotMat, np.array([x_pos_local, y_pos_local]).transpose())
-            pos_local_rotated = np.matmul(rotMat, np.array([x_pos_world_cell_center, y_pos_world_cell_center]).transpose()) - np.array([car_x, car_y]).transpose()
+            pos_local_rotated = np.matmul(rotMat, np.array([x_pos_local, y_pos_local]).transpose())
+            # pos_local_rotated = np.matmul(rotMat, np.array([x_pos_world_cell_center, y_pos_world_cell_center]).transpose()) - np.array([car_x, car_y]).transpose()
             x_pos_local = pos_local_rotated[0]
             y_pos_local = pos_local_rotated[1]
 

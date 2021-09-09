@@ -96,8 +96,8 @@ for radar_timestamp in radar_timestamps:
 
     tgridmap = pgridmap > 0.8
     tgridmap = tgridmap.astype(float)
-    print(pgridmap.shape)
-    print(tgridmap.shape)
     tgridmap = cv2.resize(tgridmap, (500, 500))
     cv2.imshow("Thresholded occupancy gridmap", tgridmap)
     cv2.waitKey(1)
+
+cv2.waitKey(0)
