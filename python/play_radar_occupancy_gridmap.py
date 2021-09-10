@@ -14,8 +14,10 @@
 
 import argparse
 import os
+from transform import build_se3_transform, se3_to_components
 from radar import load_radar, radar_polar_to_cartesian
 import numpy as np
+import numpy.matlib as matlib
 import cv2
 import pandas as pd
 from gridmap import updateGridMap, convertToProbabilities
@@ -47,9 +49,6 @@ cell_size = 3  # one cell has a width / height of 4 meters
 k = 0.6  # Degredation factor
 
 radar_odometry = pd.read_csv(radarodometry_path, sep=',')
-radar_odometry['x_abs'] = radar_odometry['x'].cumsum()
-radar_odometry['y_abs'] = radar_odometry['y'].cumsum()
-radar_odometry['yaw_abs'] = radar_odometry['yaw'].cumsum()
 
 title = "Radar Visualisation Example"
 
@@ -57,9 +56,9 @@ radar_timestamps = np.loadtxt(timestamps_path, delimiter=' ', usecols=[0], dtype
 
 # initial odometry
 idx = radar_odometry.source_radar_timestamp[radar_odometry.source_radar_timestamp == radar_timestamps[0]].index.tolist()[0]
-car_x_init = radar_odometry.iloc[idx].x_abs  # meters (not 100% sure)
-car_y_init = radar_odometry.iloc[idx].y_abs  # meters (idem)
-car_yaw_init = radar_odometry.iloc[idx].yaw_abs
+
+se3_abs = matlib.identity(4)
+xyzrpy_abs = se3_to_components(se3_abs)
 
 for radar_timestamp in radar_timestamps:
     filename = os.path.join(args.dir, str(radar_timestamp) + '.png')
@@ -84,9 +83,16 @@ for radar_timestamp in radar_timestamps:
     cv2.waitKey(1)
 
     idx = radar_odometry.source_radar_timestamp[radar_odometry.source_radar_timestamp == radar_timestamp].index.tolist()[0]
-    car_x = (radar_odometry.iloc[idx].x_abs - car_x_init)  # meters (not 100% sure)
-    car_y = (radar_odometry.iloc[idx].y_abs - car_y_init)  # meters (idem)
-    car_yaw = radar_odometry.iloc[idx].yaw_abs - car_yaw_init
+    curr_radar_odometry = radar_odometry.iloc[idx]
+    xyzrpy = np.array([curr_radar_odometry.x, curr_radar_odometry.y, curr_radar_odometry.z,
+                       curr_radar_odometry.roll, curr_radar_odometry.pitch, curr_radar_odometry.yaw])
+    se3_rel = build_se3_transform(xyzrpy)
+    se3_abs = se3_abs * se3_rel
+    xyzrpy_abs = se3_to_components(se3_abs)
+
+    car_x = xyzrpy_abs[0]  # meters (not 100% sure)
+    car_y = xyzrpy_abs[1]  # meters (idem)
+    car_yaw = xyzrpy_abs[5]
 
     updateGridMap(gridmap, cell_size, k, car_x, car_y, car_yaw, np.flipud(cart_img))
     pgridmap = convertToProbabilities(gridmap)
