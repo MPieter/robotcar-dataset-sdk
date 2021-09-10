@@ -46,8 +46,8 @@ def updateGridMap(gridmap, cell_size, k, car_x, car_y, car_yaw, cart_img):
     idx_x_high = np.ceil(np.max([idx_x_00, idx_x_11, idx_x_10, idx_x_01])).astype(int)
     idx_y_high = np.ceil(np.max([idx_y_00, idx_y_11, idx_y_10, idx_y_01])).astype(int)
 
-    for i in range(idx_x_low, idx_x_high):
-        for j in range(idx_y_low, idx_y_high):
+    for i in range(idx_x_low, np.min([idx_x_high, gridmap.shape[0]])):
+        for j in range(idx_y_low, np.min([idx_y_high, gridmap.shape[1]])):
             # Find RCS value for this point
             x_pos_world_cell_center = (i - gridmap.shape[0] / 2) * cell_size
             y_pos_world_cell_center = (j - gridmap.shape[1] / 2) * cell_size
