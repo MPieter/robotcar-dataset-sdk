@@ -1,13 +1,14 @@
-from math import factorial
 import numpy as np
 from scipy import ndimage
 import cv2
 
+gridmap = np.full((300, 300), 0)
+gridmap_teller = np.full((300, 300), 0, dtype=np.float64)
+gridmap_noemer = np.full((300, 300), 0, dtype=np.float64)
 cell_size = 3  # one cell has a width / height of 4 meters
-k = 0.8  # Degredation factor
 
 
-def cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap, cell_size, car_x, car_y, car_yaw):
+def cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap_shape, cell_size, car_x, car_y, car_yaw):
     rot = car_yaw
     rotMat = np.array([[np.cos(rot), - np.sin(rot)],
                        [np.sin(rot), np.cos(rot)]])
@@ -17,22 +18,22 @@ def cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap, cell_size, car_x, c
 
     pos_world = np.matmul(rotMat, np.array([x_local, y_local]).transpose()) + np.array([car_x, car_y]).transpose()
 
-    pos_world_pixels = np.divide(pos_world, cell_size) + np.array([gridmap.shape[0] / 2, gridmap.shape[1] / 2]).transpose()
+    pos_world_pixels = np.divide(pos_world, cell_size) + np.array([gridmap_shape[0] / 2, gridmap_shape[1] / 2]).transpose()
 
     return pos_world_pixels[0], pos_world_pixels[1]
 
 
-def rotated_cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap, cell_size, car_x, car_y, car_yaw):
+def rotated_cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap_shape, cell_size, car_x, car_y, car_yaw):
     x_world = (x_idx - 250) * 0.25 + car_x
     y_world = (y_idx - 250) * 0.25 * (-1) + car_y
 
-    pos_world_pixels = np.divide(np.array([x_world, y_world]).transpose(), cell_size) + np.array([gridmap.shape[0] / 2, gridmap.shape[1] / 2]).transpose()
+    pos_world_pixels = np.divide(np.array([x_world, y_world]).transpose(), cell_size) + np.array([gridmap_shape[0] / 2, gridmap_shape[1] / 2]).transpose()
 
     return pos_world_pixels[0], pos_world_pixels[1]
 
 
-def updateGridMap(gridmap, car_x, car_y, car_yaw, cart_img, inv_sensor_model_mask):
-    cart_img *= inv_sensor_model_mask
+def updateGridMap(car_x, car_y, car_yaw, cart_img, inv_sensor_model_mask):
+    # cart_img *= inv_sensor_model_mask
     cart_img_rotated = ndimage.rotate(cart_img, np.rad2deg(car_yaw), reshape=False)
     print(car_yaw)
     cv2.imshow("Cart img rotated", cart_img_rotated)
@@ -41,10 +42,10 @@ def updateGridMap(gridmap, car_x, car_y, car_yaw, cart_img, inv_sensor_model_mas
     # rot = np.deg2rad(car_yaw)
     rot = car_yaw
 
-    idx_x_00, idx_y_00 = cart_img_point_to_world_idx_point(0, 0, gridmap, cell_size, car_x, car_y, car_yaw)
-    idx_x_11, idx_y_11 = cart_img_point_to_world_idx_point(cart_img.shape[0], cart_img.shape[1], gridmap, cell_size, car_x, car_y, car_yaw)
-    idx_x_01, idx_y_01 = cart_img_point_to_world_idx_point(0, cart_img.shape[1], gridmap, cell_size, car_x, car_y, car_yaw)
-    idx_x_10, idx_y_10 = cart_img_point_to_world_idx_point(cart_img.shape[0], 0, gridmap, cell_size, car_x, car_y, car_yaw)
+    idx_x_00, idx_y_00 = cart_img_point_to_world_idx_point(0, 0, gridmap.shape, cell_size, car_x, car_y, car_yaw)
+    idx_x_11, idx_y_11 = cart_img_point_to_world_idx_point(cart_img.shape[0], cart_img.shape[1], gridmap.shape, cell_size, car_x, car_y, car_yaw)
+    idx_x_01, idx_y_01 = cart_img_point_to_world_idx_point(0, cart_img.shape[1], gridmap.shape, cell_size, car_x, car_y, car_yaw)
+    idx_x_10, idx_y_10 = cart_img_point_to_world_idx_point(cart_img.shape[0], 0, gridmap.shape, cell_size, car_x, car_y, car_yaw)
 
     idx_x_low = np.floor(np.min([idx_x_00, idx_x_11, idx_x_10, idx_x_01])).astype(int)
     idx_y_low = np.floor(np.min([idx_y_00, idx_y_11, idx_y_10, idx_y_01])).astype(int)
@@ -78,7 +79,8 @@ def updateGridMap(gridmap, car_x, car_y, car_yaw, cart_img, inv_sensor_model_mas
                 continue  # This part of the occupancy map is not in the current radar frame
             # if subset.size > 4:
                 # print("found subset in cart_img bigger then 4, actual size is " + str(subset.size))
-            percentile = np.percentile(subset, 20)
+            # print(subset.size)
+            percentile = np.percentile(subset, 80)
             subset = subset[subset > percentile]
 
             del_subset = np.delete(subset, np.where(subset == 0))
@@ -91,20 +93,15 @@ def updateGridMap(gridmap, car_x, car_y, car_yaw, cart_img, inv_sensor_model_mas
             x_idx = np.average(x_pos_local_boundaries_idx)
             y_idx = np.average(y_pos_local_boundaries_idx)
             r = np.sqrt((x_idx - 250) ** 2 + (y_idx - 250) ** 2) / 4  # Length in pixels
-            # plausibility_range = np.exp(-0.0001 * (r ** 2))
-            plausibility_range = 1
 
-            # Scale the detection probability between 0.5 and 1
-            p = 0.5 + 0.5 * rcs * plausibility_range
-
-            gridmap[i, j] = gridmap[i, j] * k + np.log(p / (1 - p))
-
-            # TODO implement a correct probalistic model
-            # -> remove degrading factor
-            # -> in order to punish high r values, create a function that converges to 0.5 so that
-            #    log likelihoods are not impacted (log(0.5/(1 - 0.5)) = 0). P = 0.5 equals no information
+            if r < 1:
+                r = 1
+            gridmap_teller[i, j] += rcs / r
+            gridmap_noemer[i, j] += 1 / r
 
 
-def convertToProbabilities(gridmap):
-    pgridmap = 1 - np.divide(np.full(gridmap.shape, 1), 1 + np.exp(gridmap))
-    return pgridmap
+def get_amplitude_gridmap():
+    gridmap_noemer[gridmap_noemer == 0] = 1
+    weighted_averages = np.divide(gridmap_teller, gridmap_noemer)
+    # TODO normalize?
+    return weighted_averages

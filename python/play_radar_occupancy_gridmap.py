@@ -21,6 +21,9 @@ import numpy.matlib as matlib
 import cv2
 import pandas as pd
 from gridmap import updateGridMap, convertToProbabilities
+import amplitude_gridmap
+import scipy.signal
+import skimage.draw
 
 parser = argparse.ArgumentParser(description='Play back radar data from a given directory')
 
@@ -45,8 +48,7 @@ interpolate_crossover = True
 
 # Occupancy grid map
 gridmap = np.full((300, 300), 0.5)
-cell_size = 3  # one cell has a width / height of 4 meters
-k = 0.6  # Degredation factor
+
 
 radar_odometry = pd.read_csv(radarodometry_path, sep=',')
 
@@ -60,6 +62,63 @@ idx = radar_odometry.source_radar_timestamp[radar_odometry.source_radar_timestam
 se3_abs = matlib.identity(4)
 xyzrpy_abs = se3_to_components(se3_abs)
 
+
+def plot_peaks(cart_img, fft_data, azimuths, radar_resolution):
+    cart_img_with_peaks = np.array(cart_img)
+    keypoints = []
+    for azimuth in range(fft_data.shape[0]):
+        azimuth_data = fft_data[azimuth, :, 0]
+        peaks = scipy.signal.find_peaks(azimuth_data,
+                                        distance=100,
+                                        height=np.max(azimuth_data) * 0.70)[0]
+
+        xs = peaks * radar_resolution * np.sin(azimuths[azimuth])
+        ys = peaks * radar_resolution * np.cos(azimuths[azimuth]) * (-1)
+
+        xidxs = np.multiply(xs, 4).astype(int) + 250
+        yidxs = np.multiply(ys, 4).astype(int) + 250
+
+        keypoints.extend(list(zip(yidxs, xidxs)))
+
+        for keypoint in zip(xidxs, yidxs):
+            cv2.drawMarker(cart_img_with_peaks,
+                           keypoint,
+                           (255, 0, 0),
+                           markerType=cv2.MARKER_CROSS,
+                           markerSize=10,
+                           thickness=2,
+                           line_type=cv2.LINE_AA)
+
+    cv2.imshow("Cart img", cart_img_with_peaks)
+
+    mask = skimage.draw.polygon2mask(cart_img_with_peaks.shape, keypoints)
+    mask = mask.astype(np.uint8)
+    mask *= 255
+    cv2.imshow("Polygon mask", mask)
+
+    cv2.waitKey(1)
+
+
+def get_inverse_sensor_model_mask(cart_img, fft_data, azimuths, radar_resolution):
+    keypoints = []
+    for azimuth in range(fft_data.shape[0]):
+        azimuth_data = fft_data[azimuth, :, 0]
+        peaks = scipy.signal.find_peaks(azimuth_data,
+                                        distance=100,
+                                        height=np.max(azimuth_data) * 0.70)[0]
+
+        xs = peaks * radar_resolution * np.sin(azimuths[azimuth])
+        ys = peaks * radar_resolution * np.cos(azimuths[azimuth]) * (-1)
+
+        xidxs = np.multiply(xs, 4).astype(int) + 250
+        yidxs = np.multiply(ys, 4).astype(int) + 250
+
+        keypoints.extend(list(zip(yidxs, xidxs)))
+
+    mask = skimage.draw.polygon2mask(cart_img.shape, keypoints)
+    return mask
+
+
 for radar_timestamp in radar_timestamps:
     filename = os.path.join(args.dir, str(radar_timestamp) + '.png')
 
@@ -70,6 +129,8 @@ for radar_timestamp in radar_timestamps:
     cart_img = radar_polar_to_cartesian(azimuths, fft_data, radar_resolution, cart_resolution, cart_pixel_width,
                                         interpolate_crossover)
     cart_img = cart_img / np.max(cart_img)
+    # plot_peaks(cart_img, fft_data, azimuths, radar_resolution)
+    inv_sensor_model_mask = get_inverse_sensor_model_mask(cart_img, fft_data, azimuths, radar_resolution)
 
     # Combine polar and cartesian for visualisation
     # The raw polar data is resized to the height of the cartesian representation
@@ -94,7 +155,8 @@ for radar_timestamp in radar_timestamps:
     car_y = xyzrpy_abs[1]  # meters (idem)
     car_yaw = xyzrpy_abs[5]
 
-    updateGridMap(gridmap, cell_size, k, car_x, car_y, car_yaw, np.flipud(cart_img))
+    # Occupancy gridmap
+    updateGridMap(gridmap, car_x, car_y, car_yaw, np.flipud(cart_img), np.flipud(inv_sensor_model_mask))
     pgridmap = convertToProbabilities(gridmap)
     pgridmap = np.flipud(pgridmap)
     resized = cv2.resize(pgridmap, (500, 500), interpolation=cv2.INTER_AREA)
@@ -105,6 +167,15 @@ for radar_timestamp in radar_timestamps:
     tgridmap = tgridmap.astype(float)
     tgridmap = cv2.resize(tgridmap, (500, 500))
     cv2.imshow("Thresholded occupancy gridmap", tgridmap)
+    cv2.waitKey(1)
+
+    # Amplitude gridmap
+    amplitude_gridmap.updateGridMap(car_x, car_y, car_yaw, np.flipud(cart_img), np.flipud(inv_sensor_model_mask))
+    agridmap = amplitude_gridmap.get_amplitude_gridmap()
+    agridmap = agridmap / np.max(agridmap)
+    agridmap = np.flipud(agridmap)
+    agridmap_resized = cv2.resize(agridmap, (500, 500), interpolation=cv2.INTER_AREA)
+    cv2.imshow("Amplitude gridmap", agridmap_resized)
     cv2.waitKey(1)
 
 cv2.waitKey(0)
