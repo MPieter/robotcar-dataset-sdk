@@ -21,7 +21,7 @@ import numpy.matlib as matlib
 import cv2
 import pandas as pd
 from gridmap import updateGridMap, convertToProbabilities
-import amplitude_gridmap
+from amplitude_gridmap import AmplitudeGridmap
 import scipy.signal
 import skimage.draw
 
@@ -48,7 +48,8 @@ interpolate_crossover = True
 
 # Occupancy grid map
 gridmap = np.full((300, 300), 0.5)
-
+amplitudeGridMapWithMask = AmplitudeGridmap()
+amplitudeGridMapWithoutMask = AmplitudeGridmap()
 
 radar_odometry = pd.read_csv(radarodometry_path, sep=',')
 
@@ -170,12 +171,20 @@ for radar_timestamp in radar_timestamps:
     cv2.waitKey(1)
 
     # Amplitude gridmap
-    amplitude_gridmap.updateGridMap(car_x, car_y, car_yaw, np.flipud(cart_img), np.flipud(inv_sensor_model_mask))
-    agridmap = amplitude_gridmap.get_amplitude_gridmap()
-    agridmap = agridmap / np.max(agridmap)
-    agridmap = np.flipud(agridmap)
-    agridmap_resized = cv2.resize(agridmap, (500, 500), interpolation=cv2.INTER_AREA)
-    cv2.imshow("Amplitude gridmap", agridmap_resized)
-    cv2.waitKey(1)
+    # amplitudeGridMapWithMask.updateGridMap(car_x, car_y, car_yaw, np.flipud(cart_img), np.flipud(inv_sensor_model_mask))
+    # agridmap = amplitudeGridMapWithMask.get_amplitude_gridmap()
+    # agridmap = agridmap / np.max(agridmap)
+    # agridmap = np.flipud(agridmap)
+    # agridmap_resized = cv2.resize(agridmap, (1000, 1000), interpolation=cv2.INTER_AREA)
+    # cv2.imshow("Amplitude gridmap with inv sensor model mask", agridmap_resized)
+    # cv2.waitKey(1)
+
+    # amplitudeGridMapWithoutMask.updateGridMap(car_x, car_y, car_yaw, np.flipud(cart_img), np.flipud(inv_sensor_model_mask), False)
+    # agridmap_withoutmask = amplitudeGridMapWithoutMask.get_amplitude_gridmap()
+    # agridmap_withoutmask = agridmap_withoutmask / np.max(agridmap_withoutmask)
+    # agridmap_withoutmask = np.flipud(agridmap_withoutmask)
+    # agridmap_withoutmask_resized = cv2.resize(agridmap_withoutmask, (1000, 1000), interpolation=cv2.INTER_AREA)
+    # cv2.imshow("Amplitude gridmap without inv sensor model mask", agridmap_withoutmask_resized)
+    # cv2.waitKey(1)
 
 cv2.waitKey(0)

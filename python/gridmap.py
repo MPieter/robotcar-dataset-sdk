@@ -7,6 +7,31 @@ cell_size = 3  # one cell has a width / height of 4 meters
 k = 0.8  # Degredation factor
 
 
+def get_envelope_high(r):  # range should already be scaled between 0 and 1
+    r_scaled = r * 2  # to have a good exponential effect envelope is between 0 and 2
+
+    return (np.exp(-r_scaled) - np.exp(-2)) / (np.exp(0) - np.exp(-2)) * 0.5 + 0.5
+
+
+def get_envelope_low(r):  # range should already be scaled between 0 and 1
+    r_scaled = r * 2
+
+    return (-np.exp(-r_scaled) + np.exp(-0)) / (-np.exp(-2) + np.exp(0)) * 0.5
+
+
+# Implements a correct probalistic model
+# -> in order to punish high r values, create a function that converges to 0.5 so that
+#    log likelihoods are not impacted (log(0.5/(1 - 0.5)) = 0). P = 0.5 equals no information
+def plausibility_range(rcs, tmin, tmax):
+    # Scales a RCS value between the desired values
+    # Desired values depend on the range and the envelope functions, for larger ranges the envelopes converge to 0.5 meaning that the measurement
+    # will not have any impact on the probablity calculation
+
+    rmin = 0  # rcs values are between 0 and 1
+    rmax = 1
+    return (rcs - rmin) / (rmax - rmin) * (tmax - tmin) + tmin
+
+
 def cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap, cell_size, car_x, car_y, car_yaw):
     rot = car_yaw
     rotMat = np.array([[np.cos(rot), - np.sin(rot)],
@@ -32,8 +57,8 @@ def rotated_cart_img_point_to_world_idx_point(x_idx, y_idx, gridmap, cell_size, 
 
 
 def updateGridMap(gridmap, car_x, car_y, car_yaw, cart_img, inv_sensor_model_mask):
-    cart_img *= inv_sensor_model_mask
-    cart_img_rotated = ndimage.rotate(cart_img, np.rad2deg(car_yaw), reshape=False)
+    cart_img_masked = cart_img * inv_sensor_model_mask
+    cart_img_rotated = ndimage.rotate(cart_img_masked, np.rad2deg(car_yaw), reshape=False)
     print(car_yaw)
     cv2.imshow("Cart img rotated", cart_img_rotated)
     cv2.waitKey(1)
@@ -92,17 +117,18 @@ def updateGridMap(gridmap, car_x, car_y, car_yaw, cart_img, inv_sensor_model_mas
             y_idx = np.average(y_pos_local_boundaries_idx)
             r = np.sqrt((x_idx - 250) ** 2 + (y_idx - 250) ** 2) / 4  # Length in pixels
             # plausibility_range = np.exp(-0.0001 * (r ** 2))
-            plausibility_range = 1
+            # # plausibility_range = 1
 
-            # Scale the detection probability between 0.5 and 1
-            p = 0.5 + 0.5 * rcs * plausibility_range
+            # TODO test with envelope function (envelope function still has to modified such that it starts within range 0.4-0.6)
+            # otherwise probabilities are influenced too fast
+            # r_scaled = r / 62.5
+            # envelope_min = get_envelope_low(r_scaled)
+            # envelope_max = get_envelope_high(r_scaled)
+            # p = plausibility_range(rcs, envelope_min, envelope_max)
 
-            gridmap[i, j] = gridmap[i, j] * k + np.log(p / (1 - p))
+            p = (rcs - 0) / (1 - 0) * (0.9 - 0.45) + 0.45
 
-            # TODO implement a correct probalistic model
-            # -> remove degrading factor
-            # -> in order to punish high r values, create a function that converges to 0.5 so that
-            #    log likelihoods are not impacted (log(0.5/(1 - 0.5)) = 0). P = 0.5 equals no information
+            gridmap[i, j] = gridmap[i, j] + np.log(p / (1 - p))
 
 
 def convertToProbabilities(gridmap):
