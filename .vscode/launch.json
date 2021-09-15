@@ -1,0 +1,28 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Radar Odometry Estimation",
+            "type": "python",
+            "request": "launch",
+            "program": "python/play_radar_odometry_estimation.py",
+            "console": "integratedTerminal",
+            "args": [
+                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+            ]
+        },
+        {
+            "name": "Radar Occupancy Gridmap",
+            "type": "python",
+            "request": "launch",
+            "program": "python/play_radar_occupancy_gridmap.py",
+            "console": "integratedTerminal",
+            "args": [
+                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+            ]
+        }
+    ]
+}
