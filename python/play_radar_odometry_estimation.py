@@ -87,46 +87,35 @@ def get_inverse_sensor_model_mask(cart_img, fft_data, azimuths, radar_resolution
     return mask
 
 
-cart_img1_rotated = np.array([])
-cart_img2_rotated = np.array([])
+gl_cart_img1 = np.array([])
+gl_cart_img2 = np.array([])
 
 
-def calc_transform_mean_error(xy_trans):
-    cart_img_transformed = xy_transf(cart_img2_rotated, xy_trans)
-
-    # only select subregion that is guaranteed to overlap
-
-    cart_img1_subset = cart_img1_rotated[100:-100, 100:-100]
-    cart_img2_subset = cart_img_transformed[100:-100, 100:-100]
-    return np.mean(np.abs(cart_img1_subset - cart_img2_subset))
-
-
-def calc_corr(xy_trans):
-    cart_img_transformed = xy_transf(cart_img2_rotated, xy_trans)
-    cart_img1_subset = cart_img1_rotated[100:-100, 100:-100]
-    cart_img2_subset = cart_img_transformed[100:-100, 100:-100]
+def calc_corr(xyt_trans):
+    cart_img2_transformed = xyt_transf(gl_cart_img2, xyt_trans)
+    cart_img1_subset = gl_cart_img1[100:-100, 100:-100]
+    cart_img2_subset = cart_img2_transformed[100:-100, 100:-100]
     corrcoef = np.corrcoef(cart_img1_subset.ravel(), cart_img2_subset.ravel())
     return -corrcoef[0, 1]
 
 
-def determine_best_transform(cart_img1, cart_img2, gt_dy, gt_img1_yaw, gt_img2_yaw):
-    gt_dy_idx = gt_dy * 4  # 0.25 m per cell in cart_img
-    # TODO remove gt_img1_yaw, gt_img2_yaw, only focus on dx and dy for now
-    global cart_img1_rotated
-    global cart_img2_rotated
-    cart_img1_rotated = ndimage.rotate(cart_img1, np.rad2deg(gt_img1_yaw), reshape=False)
-    cart_img2_rotated = ndimage.rotate(cart_img2, np.rad2deg(gt_img2_yaw), reshape=False)
+def determine_best_transform(cart_img1, cart_img2, current_yaw):
+    global gl_cart_img1
+    global gl_cart_img2
+    gl_cart_img1 = ndimage.rotate(cart_img1, np.rad2deg(current_yaw), reshape=False)
+    gl_cart_img2 = ndimage.rotate(cart_img2, np.rad2deg(current_yaw), reshape=False)
 
-    best_params = optimize.fmin_powell(calc_corr, [0, 0])
-
+    best_params = optimize.fmin_powell(calc_corr, [0, 0, 0])
     x_optimal = best_params[0]
     y_optimal = best_params[1]
+    rad_optimal = best_params[2]
 
-    return x_optimal / 4, y_optimal / 4
+    return x_optimal / 4, y_optimal / 4, rad_optimal
 
 
-def xy_transf(img, xy_trans):
-    return ndimage.affine_transform(np.reshape(img, (501, 501)), [1, 1], np.array(xy_trans), order=1)
+def xyt_transf(img, xyt_trans):
+    img_rotated = ndimage.rotate(img, np.rad2deg(-xyt_trans[2]), reshape=False)
+    return ndimage.affine_transform(np.reshape(img_rotated, (501, 501)), [1, 1], np.array(xyt_trans[0:2]), order=1)
 
 
 def x_trans(img, x_trans):
@@ -200,17 +189,21 @@ for radar_timestamp in radar_timestamps:
     car_yaw = xyzrpy_abs[5]
 
     if previous_cart_img.size > 0:
-        x_optimal, y_optimal = determine_best_transform(previous_cart_img, cart_img, car_y - xyzrpy_abs_before[1], xyzrpy_abs_before[5], car_yaw)
-        car_pos_estimates.append([car_pos_estimates[-1][0] + x_optimal, car_pos_estimates[-1][1] + y_optimal])
+        x_optimal, y_optimal, rad_optimal = determine_best_transform(previous_cart_img, cart_img, car_pos_estimates[-1][2])
+        car_pos_estimates.append([
+            car_pos_estimates[-1][0] + x_optimal,
+            car_pos_estimates[-1][1] + y_optimal,
+            car_pos_estimates[-1][2] + rad_optimal
+        ])
     else:
         # init car_pos_estimates
-        car_pos_estimates.append([car_x, car_y])
+        car_pos_estimates.append([car_x, car_y, car_yaw])
     previous_cart_img = cart_img
 
     car_pos.append([car_x, car_y])
 
     xs, ys = zip(*car_pos)
-    xs_est, ys_est = zip(*car_pos_estimates)
+    xs_est, ys_est, rads_est = zip(*car_pos_estimates)
     plt.figure(1)
     plt.clf()
     plt.plot(xs, ys, label="Ground truth")
@@ -223,7 +216,8 @@ for radar_timestamp in radar_timestamps:
 
 xs, ys = zip(*car_pos)
 xs_est, ys_est = zip(*car_pos_estimates)
-plt.figure()
+plt.figure(1)
+plt.clf()
 plt.plot(xs, ys, label="Ground truth")
 plt.plot(xs_est, ys_est, label="Estimation")
 plt.title("Odometry")
