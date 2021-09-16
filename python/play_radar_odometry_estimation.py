@@ -215,7 +215,7 @@ for radar_timestamp in radar_timestamps:
 
 
 xs, ys = zip(*car_pos)
-xs_est, ys_est = zip(*car_pos_estimates)
+xs_est, ys_est, rads_est = zip(*car_pos_estimates)
 plt.figure(1)
 plt.clf()
 plt.plot(xs, ys, label="Ground truth")
