@@ -102,8 +102,7 @@ def determine_best_transform(cart_img1, cart_img2, homMatrix, current_yaw):
         matches = sorted(matches, key=lambda x: x.distance)
 
         vis_matches = cv2.drawMatches(img1, kpt1, img2, kpt2, matches[:30], None, flags=2)
-
-        cv2.imshow('Matches', vis_matches)
+        cv2.imshow('Matches CART', vis_matches)
         cv2.waitKey(1)
 
         matchesSrcPoints = []
@@ -134,14 +133,63 @@ def determine_best_transform(cart_img1, cart_img2, homMatrix, current_yaw):
         return homMatrix
     except Exception as e:
         print(e)
-        return 0, 0, 0
+        return homMatrix
+
+
+def determine_best_transform_polar(polar1, polar2, homMatrix, azimuths, radar_resolution):
+    orb = cv2.ORB_create()
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+
+    polar1 = (polar1 / np.max(polar1) * 255).astype(np.uint8)
+    polar2 = (polar2 / np.max(polar2) * 255).astype(np.uint8)
+
+    kpt1, des1 = orb.detectAndCompute(polar1, None)
+    kpt2, des2 = orb.detectAndCompute(polar2, None)
+
+    matches = bf.match(des1, des2)
+    matches = sorted(matches, key=lambda x: x.distance)
+
+    vis_matches = cv2.drawMatches(polar1, kpt1, polar2, kpt2, matches[:30], None, flags=2)
+    cv2.imshow('Matches POLAR', vis_matches)
+    cv2.waitKey(1)
+
+    matchesSrcPoints = []
+    matchesDstPoints = []
+
+    for match in matches:
+        a_src = azimuths[int(np.round(kpt1[match.queryIdx].pt[1]))][0]
+        r_src = kpt1[match.queryIdx].pt[0] * radar_resolution[0]
+        a_dst = azimuths[int(np.round(kpt2[match.trainIdx].pt[1]))][0]
+        r_dst = kpt2[match.trainIdx].pt[0] * radar_resolution[0]
+
+        x_src = r_src * np.sin(a_src)
+        y_src = -r_src * np.cos(a_src)
+        x_dst = r_dst * np.sin(a_dst)
+        y_dst = -r_dst * np.cos(a_dst)
+        matchesSrcPoints.append([x_src, y_src])
+        matchesDstPoints.append([x_dst, y_dst])
+
+    matchesSrcPoints = np.array(matchesSrcPoints)
+    matchesDstPoints = np.array(matchesDstPoints)
+    inliers = np.array([])
+    retval, inliers = cv2.estimateAffinePartial2D(matchesSrcPoints, matchesDstPoints, inliers, cv2.RANSAC, 1, 3000)
+    if retval is not None:
+        if homMatrix is None:
+            homMatrix = np.vstack([retval, [0, 0, 1]])
+        else:
+            homMatrix = np.matmul(homMatrix, np.vstack([retval, [0, 0, 1]]))
+
+    return homMatrix
 
 
 car_pos = []
-car_pos_estimates = []
+car_pos_estimates_cart_orb = []
+car_pos_estimates_polar_orb = []
 
 previous_cart_img = np.array([])
-homMatrix = None
+previous_fft_data = np.array([])
+homMatrix_cart_orb = None
+homMatrix_polar_orb = None
 
 for radar_timestamp in radar_timestamps:
     filename = os.path.join(args.dir, str(radar_timestamp) + '.png')
@@ -167,6 +215,9 @@ for radar_timestamp in radar_timestamps:
     cv2.imshow(title, vis * 2.)  # The data is doubled to improve visualisation
     cv2.waitKey(1)
 
+    cv2.imshow("FFT data", fft_data)
+    cv2.waitKey(1)
+
     idx = radar_odometry.source_radar_timestamp[radar_odometry.source_radar_timestamp == radar_timestamp].index.tolist()[0]
     curr_radar_odometry = radar_odometry.iloc[idx]
     xyzrpy = np.array([curr_radar_odometry.x, curr_radar_odometry.y, curr_radar_odometry.z,
@@ -181,26 +232,38 @@ for radar_timestamp in radar_timestamps:
     car_yaw = xyzrpy_abs[5]
 
     if previous_cart_img.size > 0:
-        homMatrix = determine_best_transform(previous_cart_img, cart_img, homMatrix, car_pos_estimates[-1][2])
-        newPos = np.matmul(homMatrix, np.array([0, 0, 1]).transpose())
-        car_pos_estimates.append([
+        homMatrix_cart_orb = determine_best_transform(previous_cart_img, cart_img, homMatrix_cart_orb, car_pos_estimates_cart_orb[-1][2])
+        newPos = np.matmul(homMatrix_cart_orb, np.array([0, 0, 1]).transpose())
+        car_pos_estimates_cart_orb.append([
             newPos[0],
             newPos[1],
-            0  # TODO : get angle from homMatrix
+            0  # TODO : get angle from homMatrix_cart_orb
+        ])
+
+        homMatrix_polar_orb = determine_best_transform_polar(previous_fft_data, fft_data, homMatrix_polar_orb, azimuths, radar_resolution)
+        newPos = np.matmul(homMatrix_polar_orb, np.array([0, 0, 1]).transpose())
+        car_pos_estimates_polar_orb.append([
+            newPos[0],
+            newPos[1],
+            0  # TODO : get angle from hom matrix
         ])
     else:
-        # init car_pos_estimates
-        car_pos_estimates.append([car_x, car_y, car_yaw])
+        # init car_pos_estimates_cart_orb
+        car_pos_estimates_cart_orb.append([car_x, car_y, car_yaw])
+        car_pos_estimates_polar_orb.append([car_x, car_y, car_yaw])
     previous_cart_img = cart_img
+    previous_fft_data = fft_data
 
     car_pos.append([car_x, car_y, car_yaw])
 
     xs, ys, rads = zip(*car_pos)
-    xs_est, ys_est, rads_est = zip(*car_pos_estimates)
+    xs_est, ys_est, rads_est = zip(*car_pos_estimates_cart_orb)
+    xs_est_polar, ys_est_polar, rads_est_polar = zip(*car_pos_estimates_polar_orb)
     plt.figure(1)
     plt.clf()
     plt.plot(xs, ys, label="Ground truth")
-    plt.plot(ys_est, xs_est, label="Estimation")
+    plt.plot(ys_est, xs_est, label="Cart Estimation")
+    plt.plot(ys_est_polar, xs_est_polar, label="Polar Estimation")
     plt.title("Odometry")
     plt.legend()
     plt.ion()
@@ -209,7 +272,8 @@ for radar_timestamp in radar_timestamps:
     plt.figure(2)
     plt.clf()
     plt.plot(np.diff(xs), 'r', label="Ground truth")
-    plt.plot(np.diff(ys_est), 'bo', label="Estimation")
+    plt.plot(np.diff(ys_est), 'bo', label="Cart Estimation")
+    plt.plot(np.diff(ys_est_polar), 'go', label="Polar Estimation")
     plt.title("X")
     plt.legend()
     plt.ion()
@@ -218,7 +282,8 @@ for radar_timestamp in radar_timestamps:
     plt.figure(3)
     plt.clf()
     plt.plot(np.diff(ys), 'r', label="Ground truth")
-    plt.plot(np.diff(xs_est), 'bo', label="Estimation")
+    plt.plot(np.diff(xs_est), 'bo', label="Cart Estimation")
+    plt.plot(np.diff(xs_est_polar), 'go', label="Polar Estimation")
     plt.title("Y")
     plt.legend()
     plt.ion()
@@ -227,7 +292,7 @@ for radar_timestamp in radar_timestamps:
     plt.figure(4)
     plt.clf()
     plt.plot(np.diff(rads), 'r', label="Ground truth")
-    plt.plot(np.diff(rads_est), 'bo', label="Estimation")
+    plt.plot(np.diff(rads_est), 'bo', label="Cart Estimation")
     plt.title("Yaw")
     plt.legend()
     plt.ion()
@@ -235,7 +300,7 @@ for radar_timestamp in radar_timestamps:
 
 
 xs, ys, rads = zip(*car_pos)
-xs_est, ys_est, rads_est = zip(*car_pos_estimates)
+xs_est, ys_est, rads_est = zip(*car_pos_estimates_cart_orb)
 plt.figure(1)
 plt.clf()
 plt.plot(xs, ys, label="Ground truth")
