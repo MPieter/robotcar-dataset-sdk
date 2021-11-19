@@ -54,12 +54,10 @@ gridmap = np.full((300, 300), 0.5)
 amplitudeGridMapWithMask = AmplitudeGridmap()
 amplitudeGridMapWithoutMask = AmplitudeGridmap()
 
-radar_odometry = pd.read_csv(radarodometry_path, sep=',')
-
 title = "Radar Visualisation Example"
 
+radar_odometry = pd.read_csv(radarodometry_path, sep=',')
 radar_timestamps = np.loadtxt(timestamps_path, delimiter=' ', usecols=[0], dtype=np.int64)
-
 # initial odometry
 idx = radar_odometry.source_radar_timestamp[radar_odometry.source_radar_timestamp == radar_timestamps[0]].index.tolist()[0]
 
@@ -189,21 +187,26 @@ for radar_timestamp in radar_timestamps:
     car_yaw = xyzrpy_abs[5]
 
     if previous_cart_img.size > 0:
-        x_optimal, y_optimal, rad_optimal = determine_best_transform(previous_cart_img, cart_img, car_pos_estimates[-1][2])
+        x_optimal, y_optimal, rad_optimal = determine_best_transform(previous_cart_img, cart_img, car_pos_estimates[-1][3])
         car_pos_estimates.append([
-            car_pos_estimates[-1][0] + x_optimal,
-            car_pos_estimates[-1][1] + y_optimal,
-            car_pos_estimates[-1][2] + rad_optimal
+            radar_timestamp,
+            car_pos_estimates[-1][1] + x_optimal,
+            car_pos_estimates[-1][2] + y_optimal,
+            car_pos_estimates[-1][3] + rad_optimal
         ])
+        with open("odometry_results.txt", "w+") as odomFile:
+            for pos in car_pos_estimates:
+                odomFile.writelines([str(pos[0]) + " " + str(pos[1]) + " " + str(pos[2]) + " " + str(pos[3]) + "\n"])
+
     else:
         # init car_pos_estimates
-        car_pos_estimates.append([car_x, car_y, car_yaw])
+        car_pos_estimates.append([radar_timestamp, car_x, car_y, car_yaw])
     previous_cart_img = cart_img
 
-    car_pos.append([car_x, car_y, car_yaw])
+    car_pos.append([radar_timestamp, car_x, car_y, car_yaw])
 
-    xs, ys, rads = zip(*car_pos)
-    xs_est, ys_est, rads_est = zip(*car_pos_estimates)
+    _, xs, ys, rads = zip(*car_pos)
+    _, xs_est, ys_est, rads_est = zip(*car_pos_estimates)
     plt.figure(1)
     plt.clf()
     plt.plot(xs, ys, label="Ground truth")
@@ -240,9 +243,17 @@ for radar_timestamp in radar_timestamps:
     plt.ion()
     plt.show()
 
+    plt.figure(5)
+    plt.clf()
+    plt.plot(rads, 'r', label="Ground truth")
+    plt.plot(rads_est, 'bo', label="Estimation")
+    plt.title("Absolute Yaw")
+    plt.legend()
+    plt.show()
 
-xs, ys, rads = zip(*car_pos)
-xs_est, ys_est, rads_est = zip(*car_pos_estimates)
+
+_, xs, ys, rads = zip(*car_pos)
+_, xs_est, ys_est, rads_est = zip(*car_pos_estimates)
 plt.figure(1)
 plt.clf()
 plt.plot(xs, ys, label="Ground truth")
@@ -269,6 +280,13 @@ plt.clf()
 plt.plot(np.diff(rads), 'r', label="Ground truth")
 plt.plot(np.diff(rads_est), 'bo', label="Estimation")
 plt.title("Yaw")
+plt.legend()
+
+plt.figure(5)
+plt.clf()
+plt.plot(rads, 'r', label="Ground truth")
+plt.plot(rads_est, 'bo', label="Estimation")
+plt.title("Absolute Yaw")
 plt.legend()
 
 plt.show()

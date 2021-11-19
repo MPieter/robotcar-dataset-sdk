@@ -87,7 +87,17 @@ def get_inverse_sensor_model_mask(cart_img, fft_data, azimuths, radar_resolution
     return mask
 
 
-def determine_best_transform(cart_img1, cart_img2, homMatrix, current_yaw):
+def writeLandmarks(landmarks):
+    filename = "landmarks.txt"
+    with open(filename, "w+") as cfarFile:
+        goodLandmarks = filter(lambda x: len(x) > 4, landmarks)
+        for trackId, track in enumerate(goodLandmarks):
+            for item in track:
+                cfarFile.writelines([str(trackId) + " " + str(item[0]) + " " + str(item[1]) + " " + str(item[2]) + " " +
+                                     str(item[3]) + " " + str(item[4]) + " " + str(item[5]) + " " + str(len(track)) + "\n"])
+
+
+def determine_best_transform(radar_timestamp_idx, radar_timestamp, cart_img1, cart_img2, homMatrix, current_yaw, landmarks):
     try:
         orb = cv2.ORB_create()
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
@@ -101,7 +111,7 @@ def determine_best_transform(cart_img1, cart_img2, homMatrix, current_yaw):
         matches = bf.match(des1, des2)
         matches = sorted(matches, key=lambda x: x.distance)
 
-        vis_matches = cv2.drawMatches(img1, kpt1, img2, kpt2, matches[:30], None, flags=2)
+        vis_matches = cv2.drawMatches(img1, kpt1, img2, kpt2, matches[:100], None, flags=2)
         cv2.imshow('Matches CART', vis_matches)
         cv2.waitKey(1)
 
@@ -129,6 +139,23 @@ def determine_best_transform(cart_img1, cart_img2, homMatrix, current_yaw):
                 homMatrix = np.vstack([retval, [0, 0, 1]])
             else:
                 homMatrix = np.matmul(homMatrix, np.vstack([retval, [0, 0, 1]]))
+
+            # check tracks
+            for matchIdx, matchSrcPoint in enumerate(matchesSrcPoints):
+                if inliers[matchIdx][0] == 1:
+                    x_src = matchSrcPoint[0]
+                    y_src = matchSrcPoint[1]
+                    x_dst = matchesDstPoints[matchIdx][0]
+                    y_dst = matchesDstPoints[matchIdx][1]
+                    r_dst = np.sqrt(x_dst ** 2 + y_dst ** 2)
+                    thetha_dst = np.arctan2(y_dst, x_dst)
+                    found_track = False
+                    for track in landmarks:
+                        if track[-1][0] == radar_timestamp_idx - 1 and track[-1][2] == x_src and track[-1][3] == y_src:
+                            track.append((radar_timestamp_idx, radar_timestamp, x_dst, y_dst, r_dst, thetha_dst))
+                            found_track = True
+                    if found_track == False:
+                        landmarks.append([(radar_timestamp_idx, radar_timestamp, x_dst, y_dst, r_dst, thetha_dst)])
 
         return homMatrix
     except Exception as e:
@@ -191,7 +218,9 @@ previous_fft_data = np.array([])
 homMatrix_cart_orb = None
 homMatrix_polar_orb = None
 
-for radar_timestamp in radar_timestamps:
+landmarks = []
+
+for radar_timestamp_idx, radar_timestamp in enumerate(radar_timestamps):
     filename = os.path.join(args.dir, str(radar_timestamp) + '.png')
 
     if not os.path.isfile(filename):
@@ -232,7 +261,7 @@ for radar_timestamp in radar_timestamps:
     car_yaw = xyzrpy_abs[5]
 
     if previous_cart_img.size > 0:
-        homMatrix_cart_orb = determine_best_transform(previous_cart_img, cart_img, homMatrix_cart_orb, car_pos_estimates_cart_orb[-1][2])
+        homMatrix_cart_orb = determine_best_transform(radar_timestamp_idx, radar_timestamp, previous_cart_img, cart_img, homMatrix_cart_orb, car_pos_estimates_cart_orb[-1][2], landmarks)
         newPos = np.matmul(homMatrix_cart_orb, np.array([0, 0, 1]).transpose())
         car_pos_estimates_cart_orb.append([
             newPos[0],
@@ -298,6 +327,16 @@ for radar_timestamp in radar_timestamps:
     plt.ion()
     plt.show()
 
+    plt.figure(5)
+    plt.clf()
+    plt.plot(rads, 'r', label="Ground truth")
+    plt.plot(rads_est, 'bo', label="Estimation")
+    plt.title("Absolute Yaw")
+    plt.legend()
+    plt.show()
+
+    writeLandmarks(landmarks)
+
 
 xs, ys, rads = zip(*car_pos)
 xs_est, ys_est, rads_est = zip(*car_pos_estimates_cart_orb)
@@ -328,6 +367,14 @@ plt.plot(np.diff(rads), 'r', label="Ground truth")
 plt.plot(np.diff(rads_est), 'bo', label="Estimation")
 plt.title("Yaw")
 plt.legend()
+
+plt.figure(5)
+plt.clf()
+plt.plot(rads, 'r', label="Ground truth")
+plt.plot(rads_est, 'bo', label="Estimation")
+plt.title("Absolute Yaw")
+plt.legend()
+
 
 plt.show()
 cv2.waitKey(0)
