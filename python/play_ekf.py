@@ -1,6 +1,7 @@
 import argparse
 import os
 from transform import build_se3_transform, se3_to_components
+from radar import load_radar, radar_polar_to_cartesian
 import numpy.linalg
 import numpy as np
 import numpy.matlib as matlib
@@ -39,12 +40,12 @@ def update_state(state, ut, dt, dx_gt, dy_gt, dthetha_gt):
     # Only need to update the first 3 elements: x, y, thetha
     updated_state = np.copy(state)
 
-    dx = -vt / wt * np.sin(state[2]) + vt / wt * np.sin(state[2] + wt * dt)
-    dy = vt / wt * np.cos(state[2]) - vt / wt * np.cos(state[2] + wt * dt)
+    dx = -vt / wt * np.cos(state[2]) + vt / wt * np.cos(state[2] + wt * dt)
+    dy = -vt / wt * np.sin(state[2]) + vt / wt * np.sin(state[2] + wt * dt)
     dthetha = wt * dt
 
-    updated_state[0] = state[0] + dy * (-1)
-    updated_state[1] = state[1] + dx
+    updated_state[0] = state[0] + dx
+    updated_state[1] = state[1] + dy
     updated_state[2] = state[2] + dthetha
 
     return updated_state
@@ -54,8 +55,8 @@ def update_cov(state, cov, ut, dt, Rtx):
     Gt = np.diag(np.full(cov.shape[0], 1))
     vt = ut[0]
     wt = ut[1]
-    Gt[0, 2] = - vt / wt * np.cos(state[2]) + vt / wt * np.cos(state[2] + wt * dt)
-    Gt[1, 2] = - vt / wt * np.sin(state[2]) + vt / wt * np.sin(state[2] + wt * dt)
+    Gt[0, 2] = vt / wt * np.sin(state[2]) - vt / wt * np.sin(state[2] + wt * dt)
+    Gt[1, 2] = - vt / wt * np.cos(state[2]) + vt / wt * np.cos(state[2] + wt * dt)
 
     Fx = np.zeros((3, cov.shape[1]))
     Fx[0, 0] = 1
@@ -112,7 +113,7 @@ def ekf(state, cov, ut, zt, dt, Rtx, Q, dx, dy, dthetha):
         Ki, Hi = kalman_gain(updated_cov, Q, landmarkIdx, delta, q)
         updated_state = updated_state + Ki @ (obs - expected_obs)
         updated_cov = (np.identity(updated_cov.shape[0]) - Ki @ Hi) @ updated_cov
-    return predicted_state, predicted_state, predicted_cov
+    return predicted_state, updated_state, updated_cov
 
 
 # EKF Slam Parameters
@@ -121,6 +122,14 @@ N_LANDMARKS = 1000
 varR = 0.0438 * 2  # Variance of range measurements of landmarks
 varThetha = 2 / 180  # Variance of thetha measurements of landmarks
 Q = np.diag([varR, varThetha])
+
+# Cartesian Visualsation Setup
+# Resolution of the cartesian form of the radar scan in metres per pixel
+cart_resolution = .25
+# Cartesian visualisation size (used for both height and width)
+cart_pixel_width = 501  # pixels
+interpolate_crossover = True
+
 # End Parameters
 
 odometry = np.loadtxt("odometry_results.txt")
@@ -189,9 +198,11 @@ def getLandMarksCurrentFrame(landmarks, radar_timestamp, highestLandmarkId):
         landmarkId = int(landmark[0])
         landmark_r = landmark[5]
         landmark_thetha = landmark[6]
+        landmark_x = landmark[3]  # relative to robot pose
+        landmark_y = landmark[4]
 
         landmarkNew = landmarkId > highestLandmarkId
-        result.append((landmarkNew, landmarkId, landmark_r, landmark_thetha))
+        result.append((landmarkNew, landmarkId, landmark_r, landmark_thetha, landmark_x, landmark_y))
     return result
 
 
@@ -208,7 +219,7 @@ for odomIdx, odom in enumerate(odometry):
 
         zt = getLandMarksCurrentFrame(landmarks, radar_timestamp, maxLandmarkId)
         if len(zt) > 0:
-            maxLandmarkId = max(maxLandmarkId, max(zt, key=lambda x: x[0])[0])
+            maxLandmarkId = max(maxLandmarkId, max(zt, key=lambda x: x[1])[1])
 
         # TODO noise on velocity measurements
         Rtx = np.zeros((3, 3))  # TODO is this matrix diagonal?
@@ -219,6 +230,11 @@ for odomIdx, odom in enumerate(odometry):
         predicted_state, state, cov = ekf(state, cov, ut, zt, dt, Rtx, Q, dx, dy, dthetha)
 
         # Ground truth and analysis
+
+        filename = os.path.join(args.dir, str(int(radar_timestamp)) + '.png')
+        timestamps, azimuths, valid, fft_data, radar_resolution = load_radar(filename)
+        cart_img = radar_polar_to_cartesian(azimuths, fft_data, radar_resolution, cart_resolution, cart_pixel_width,
+                                            interpolate_crossover)
 
         idx = radar_odometry.source_radar_timestamp[radar_odometry.source_radar_timestamp == radar_timestamp].index.tolist()[0]
         curr_radar_odometry = radar_odometry.iloc[idx]
@@ -262,16 +278,34 @@ for odomIdx, odom in enumerate(odometry):
         _, xs_odom_est, ys_odom_est, rad_odom_est = zip(*car_pos_odom_estimates)
         _, xs_ekf_predicted_est, ys_ekf_predicted_est, rad_ekf_predicted_est = zip(*car_pos_ekf_predicted_estimates)
         _, xs_ekf_est, ys_ekf_est, rad_ekf_est = zip(*car_pos_ekf_estimates)
-        plt.figure(1)
+        plt.figure(1, figsize=(10, 10))
         plt.clf()
         plt.plot(xs, ys, label="Ground truth")
         plt.plot(xs_odom_est, ys_odom_est, label="Odom estimation")
         plt.plot(xs_ekf_predicted_est, ys_ekf_predicted_est, label="EKF Prediction step")
         plt.plot(xs_ekf_est, ys_ekf_est, label="EKF Estimation")
+        # Plot landmarks
+        landmarksXs = []
+        landmarksYs = []
+        for z in zt:
+            landmarkXPos = state[3 + z[1] * 2]
+            landmarksXs.append(landmarkXPos)
+            landmarkYPos = state[3 + z[1] * 2 + 1]
+            landmarksYs.append(landmarkYPos)
+        plt.plot(landmarksXs, landmarksYs, 'bo', label="Landmarks")
         plt.title("Odometry")
         plt.legend()
         plt.ion()
         plt.show()
 
-        cv2.imshow('test', np.zeros((500, 500)))
+        # Visualize current frame with landmarks
+        cart_img_vis = cv2.cvtColor(cart_img, cv2.COLOR_GRAY2RGB)
+        x_center = int(cart_img.shape[0] / 2)
+        y_center = int(cart_img.shape[1] / 2)
+        for z in zt:
+            landmark_x_local_pixel = int(z[4] / cart_resolution + x_center)
+            landmark_y_local_pixel = int(z[5] / cart_resolution + y_center)
+            cv2.circle(cart_img_vis, (landmark_x_local_pixel, landmark_y_local_pixel), 5, (0, 255, 0), -1)
+
+        cv2.imshow('Current frame', cart_img_vis)
         cv2.waitKey(1)
