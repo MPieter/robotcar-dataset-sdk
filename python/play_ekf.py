@@ -74,7 +74,7 @@ def update_cov(state, cov, ut, dt, Rtx):
 def kalman_gain(updated_cov, Q, landmarkIdx, delta, q):
     lowHi = np.array([
         [-np.sqrt(q) * delta[0], -np.sqrt(q) * delta[1], 0, np.sqrt(q) * delta[0], np.sqrt(q) * delta[1]],
-        [-delta[1], delta[0], -q, delta[1], -delta[0]]])
+        [delta[1], -delta[0], -q, -delta[1], delta[0]]])
     lowHi = np.divide(lowHi, q)
     Fxj = np.zeros((5, updated_cov.shape[0]))
     Fxj[0, 0] = 1
@@ -124,7 +124,7 @@ def ekf(state, cov, ut, zt, dt, Rtx, Q, dx, dy, dthetha):
                           updated_state[3 + landmarkIdx * 2 + 1] - updated_state[1]]).transpose()
         q = np.transpose(delta) @ delta
         obs = np.array([landmark_r, landmark_thetha]).transpose()
-        expected_obs = np.array([np.sqrt(q), np.arctan2(delta[0], delta[1]) - updated_state[2]]).transpose()
+        expected_obs = np.array([np.sqrt(q), np.arctan2(delta[1], delta[0]) - updated_state[2]]).transpose()
         diff_obs = obs - expected_obs
         diff_obs[1] = normalize_angular_value(diff_obs[1])
 
@@ -139,8 +139,8 @@ def ekf(state, cov, ut, zt, dt, Rtx, Q, dx, dy, dthetha):
 # EKF Slam Parameters
 N_LANDMARKS = 1000
 
-varR = 0.0438 * 2  # Variance of range measurements of landmarks
-varThetha = np.deg2rad(10)  # Variance of thetha measurements of landmarks
+varR = 0.0438 * 2 * 2  # Variance of range measurements of landmarks
+varThetha = 2 * np.deg2rad(10)  # Variance of thetha measurements of landmarks
 Q = np.diag([varR, varThetha])
 
 # Cartesian Visualsation Setup
@@ -231,7 +231,7 @@ for odomIdx, odom in enumerate(odometry):
         radar_timestamp = odom[0]
         dx = odom[1] - odometry[odomIdx - 1][1]
         dy = odom[2] - odometry[odomIdx - 1][2]
-        dthetha = (odom[3] - odometry[odomIdx - 1][3]) * (-1)
+        dthetha = (odom[3] - odometry[odomIdx - 1][3])
         dr = np.sqrt(dx ** 2 + dy ** 2)
         dt = (radar_timestamp - odometry[odomIdx - 1][0]) / 1e6  # Timestamps are in microseconds
 
@@ -245,9 +245,9 @@ for odomIdx, odom in enumerate(odometry):
 
         # TODO noise on velocity measurements
         Rtx = np.zeros((3, 3))  # TODO is this matrix diagonal?
-        Rtx[0, 0] = dx * 0.05
-        Rtx[1, 1] = dy * 0.05
-        Rtx[2, 2] = dthetha * 0.05
+        Rtx[0, 0] = dx * 0.01
+        Rtx[1, 1] = dy * 0.01
+        Rtx[2, 2] = dthetha * 0.01
 
         predicted_state, state, cov = ekf(state, cov, ut, zt, dt, Rtx, Q, dx, dy, dthetha)
 

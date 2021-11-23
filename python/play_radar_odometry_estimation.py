@@ -106,7 +106,7 @@ def determine_best_transform(cart_img1, cart_img2, current_yaw):
     best_params = optimize.fmin_powell(calc_corr, [0, 0, 0])
     x_optimal = best_params[0]
     y_optimal = best_params[1]
-    rad_optimal = best_params[2]
+    rad_optimal = best_params[2] * (-1)
 
     return x_optimal / 4, y_optimal / 4, rad_optimal
 
@@ -200,10 +200,10 @@ for radar_timestamp in radar_timestamps:
 
     else:
         # init car_pos_estimates
-        car_pos_estimates.append([radar_timestamp, car_x, car_y, car_yaw])
+        car_pos_estimates.append([radar_timestamp, -car_y, car_x, car_yaw])
     previous_cart_img = cart_img
 
-    car_pos.append([radar_timestamp, car_x, car_y, car_yaw])
+    car_pos.append([radar_timestamp, -car_y, car_x, car_yaw])
 
     _, xs, ys, rads = zip(*car_pos)
     _, xs_est, ys_est, rads_est = zip(*car_pos_estimates)

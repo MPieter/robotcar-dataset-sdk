@@ -50,7 +50,7 @@ for odomIdx, odom in enumerate(odometry):
         radar_timestamp = odom[0]
         dx = odom[1] - odometry[odomIdx - 1][1]
         dy = odom[2] - odometry[odomIdx - 1][2]
-        dthetha = (odom[3] - odometry[odomIdx - 1][3]) * (-1)
+        dthetha = (odom[3] - odometry[odomIdx - 1][3])
         dr = np.sqrt(dx ** 2 + dy ** 2)
         dt = (radar_timestamp - odometry[odomIdx - 1][0]) / 1e6  # Timestamps are in microseconds
 
