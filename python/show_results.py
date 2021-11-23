@@ -32,9 +32,13 @@ se3_abs = matlib.identity(4)
 xyzrpy_abs = se3_to_components(se3_abs)
 
 odometry = np.loadtxt("odometry_results.txt")
+odometry_orb_cart = np.loadtxt("odometry_results_with_cart_orb.txt")
+odometry_orb_polar = np.loadtxt("odometry_results_with_polar_orb.txt")
 
 car_pos = []
 car_pos_odom_estimates = []
+car_pos_odom_orb_cart_estimates = []
+car_pos_odom_orb_polar_estimates = []
 
 # Init initial robot pose and initial landmarks of initial frame
 # For this state there is no uncertainty as we are certain of this position
@@ -44,9 +48,22 @@ car_pos_odom_estimates.append([
     odometry[0][2],
     odometry[0][3] + np.pi / 2
 ])
+car_pos_odom_orb_cart_estimates.append([
+    odometry_orb_cart[0][0],
+    odometry_orb_cart[0][1],
+    odometry_orb_cart[0][2],
+    odometry_orb_cart[0][3] + np.pi / 2
+])
+car_pos_odom_orb_polar_estimates.append([
+    odometry_orb_polar[0][0],
+    odometry_orb_polar[0][1],
+    odometry_orb_polar[0][2],
+    odometry_orb_polar[0][3] + np.pi / 2
+])
 
 for odomIdx, odom in enumerate(odometry):
     if odomIdx != 0:
+        # Odometry via minimization
         radar_timestamp = odom[0]
         dx = odom[1] - odometry[odomIdx - 1][1]
         dy = odom[2] - odometry[odomIdx - 1][2]
@@ -86,12 +103,54 @@ for odomIdx, odom in enumerate(odometry):
             car_pos_odom_estimates[-1][3] + dthetha
         ])
 
+for odomIdx, odom in enumerate(odometry_orb_cart):
+    radar_timestamp = odom[0]
+    dx = odom[1] - odometry_orb_cart[odomIdx - 1][1]
+    dy = odom[2] - odometry_orb_cart[odomIdx - 1][2]
+    dthetha = (odom[3] - odometry_orb_cart[odomIdx - 1][3])
+    dr = np.sqrt(dx ** 2 + dy ** 2)
+    dt = (radar_timestamp - odometry_orb_cart[odomIdx - 1][0]) / 1e6
+
+    ut = np.array([dr / dt, dthetha / dt])
+    vt = ut[0]
+    wt = ut[1]
+
+    car_pos_odom_orb_cart_estimates.append([
+        radar_timestamp,
+        car_pos_odom_orb_cart_estimates[-1][1] + np.cos(car_pos_odom_orb_cart_estimates[-1][3] + wt * dt) * vt * dt,
+        car_pos_odom_orb_cart_estimates[-1][2] + np.sin(car_pos_odom_orb_cart_estimates[-1][3] + wt * dt) * vt * dt,
+        car_pos_odom_orb_cart_estimates[-1][3] + dthetha
+    ])
+
+for odomIdx, odom in enumerate(odometry_orb_polar):
+    radar_timestamp = odom[0]
+    dx = odom[1] - odometry_orb_polar[odomIdx - 1][1]
+    dy = odom[2] - odometry_orb_polar[odomIdx - 1][2]
+    dthetha = (odom[3] - odometry_orb_polar[odomIdx - 1][3])
+    dr = np.sqrt(dx ** 2 + dy ** 2)
+    dt = (radar_timestamp - odometry_orb_polar[odomIdx - 1][0]) / 1e6
+
+    ut = np.array([dr / dt, dthetha / dt])
+    vt = ut[0]
+    wt = ut[1]
+
+    car_pos_odom_orb_polar_estimates.append([
+        radar_timestamp,
+        car_pos_odom_orb_polar_estimates[-1][1] + np.cos(car_pos_odom_orb_polar_estimates[-1][3] + wt * dt) * vt * dt,
+        car_pos_odom_orb_polar_estimates[-1][2] + np.sin(car_pos_odom_orb_polar_estimates[-1][3] + wt * dt) * vt * dt,
+        car_pos_odom_orb_polar_estimates[-1][3] + dthetha
+    ])
+
 _, xs, ys, rads = zip(*car_pos)
 _, xs_est, ys_est, rads_est = zip(*car_pos_odom_estimates)
+_, xs_est_orb_cart, ys_est_orb_cart, rads_est_orb_cart = zip(*car_pos_odom_orb_cart_estimates)
+_, xs_est_orb_polar, ys_est_orb_polar, rads_est_orb_polar = zip(*car_pos_odom_orb_polar_estimates)
 plt.figure(1)
 plt.clf()
 plt.plot(xs, ys, label="Ground truth")
 plt.plot(xs_est, ys_est, label="Odom estimation")
+plt.plot(xs_est_orb_cart, ys_est_orb_cart, label="Odom orb cart")
+plt.plot(xs_est_orb_polar, ys_est_orb_polar, label="Odom orb polar")
 plt.title("Odometry")
 plt.legend()
 
@@ -99,6 +158,8 @@ plt.figure(2)
 plt.clf()
 plt.plot(np.diff(xs), 'r', label="Ground truth")
 plt.plot(np.diff(xs_est), 'bo', label="Estimation")
+plt.plot(np.diff(xs_est_orb_cart), 'go', label='Cart Estimation')
+plt.plot(np.diff(xs_est_orb_polar), 'ro', label='Polar Estimation')
 plt.title("X")
 plt.legend()
 
@@ -106,6 +167,8 @@ plt.figure(3)
 plt.clf()
 plt.plot(np.diff(ys), 'r', label="Ground truth")
 plt.plot(np.diff(ys_est), 'bo', label="Estimation")
+plt.plot(np.diff(ys_est_orb_cart), 'go', label='Cart Estimation')
+plt.plot(np.diff(ys_est_orb_polar), 'ro', label='Polar Estimation')
 plt.title("Y")
 plt.legend()
 
@@ -113,6 +176,8 @@ plt.figure(4)
 plt.clf()
 plt.plot(np.diff(rads), 'r', label="Ground truth")
 plt.plot(np.diff(rads_est), 'bo', label="Estimation")
+plt.plot(np.diff(rads_est_orb_cart), 'go', label='Cart Estimation')
+plt.plot(np.diff(rads_est_orb_polar), 'ro', label='Polar Estimation')
 plt.title("Yaw")
 plt.legend()
 

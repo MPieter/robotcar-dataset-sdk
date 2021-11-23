@@ -90,7 +90,7 @@ def get_inverse_sensor_model_mask(cart_img, fft_data, azimuths, radar_resolution
 def writeLandmarks(landmarks):
     filename = "landmarks.txt"
     with open(filename, "w+") as cfarFile:
-        goodLandmarks = filter(lambda x: len(x) > 4, landmarks)
+        goodLandmarks = filter(lambda x: len(x) > 2, landmarks)
         for trackId, track in enumerate(goodLandmarks):
             for item in track:
                 cfarFile.writelines([str(trackId) + " " + str(item[0]) + " " + str(item[1]) + " " + str(item[2]) + " " +
@@ -111,7 +111,7 @@ def determine_best_transform(radar_timestamp_idx, radar_timestamp, cart_img1, ca
         matches = bf.match(des1, des2)
         matches = sorted(matches, key=lambda x: x.distance)
 
-        vis_matches = cv2.drawMatches(img1, kpt1, img2, kpt2, matches[:100], None, flags=2)
+        vis_matches = cv2.drawMatches(img1, kpt1, img2, kpt2, matches, None, flags=2)
         cv2.imshow('Matches CART', vis_matches)
         cv2.waitKey(1)
 
@@ -139,6 +139,15 @@ def determine_best_transform(radar_timestamp_idx, radar_timestamp, cart_img1, ca
                 homMatrix = np.vstack([retval, [0, 0, 1]])
             else:
                 homMatrix = np.matmul(homMatrix, np.vstack([retval, [0, 0, 1]]))
+
+            # Plot inliers
+            matches_inliers = []
+            for matchIdx, match in enumerate(matches):
+                if inliers[matchIdx][0] == 1:
+                    matches_inliers.append(match)
+            vis_matches_inliers = cv2.drawMatches(img1, kpt1, img2, kpt2, matches_inliers, None, flags=2)
+            cv2.imshow('Matches CART inliers', vis_matches_inliers)
+            cv2.waitKey(1)
 
             # check tracks
             for matchIdx, matchSrcPoint in enumerate(matchesSrcPoints):
@@ -176,7 +185,7 @@ def determine_best_transform_polar(polar1, polar2, homMatrix, azimuths, radar_re
     matches = bf.match(des1, des2)
     matches = sorted(matches, key=lambda x: x.distance)
 
-    vis_matches = cv2.drawMatches(polar1, kpt1, polar2, kpt2, matches[:30], None, flags=2)
+    vis_matches = cv2.drawMatches(polar1, kpt1, polar2, kpt2, matches, None, flags=2)
     cv2.imshow('Matches POLAR', vis_matches)
     cv2.waitKey(1)
 
@@ -250,7 +259,7 @@ for radar_timestamp_idx, radar_timestamp in enumerate(radar_timestamps):
     idx = radar_odometry.source_radar_timestamp[radar_odometry.source_radar_timestamp == radar_timestamp].index.tolist()[0]
     curr_radar_odometry = radar_odometry.iloc[idx]
     xyzrpy = np.array([curr_radar_odometry.x, curr_radar_odometry.y, curr_radar_odometry.z,
-                       curr_radar_odometry.roll, curr_radar_odometry.pitch, curr_radar_odometry.yaw])
+                       curr_radar_odometry.roll, curr_radar_odometry.pitch, curr_radar_odometry.yaw * (-1)])
     se3_rel = build_se3_transform(xyzrpy)
     xyzrpy_abs_before = se3_to_components(se3_abs)
     se3_abs = se3_abs * se3_rel
@@ -264,35 +273,44 @@ for radar_timestamp_idx, radar_timestamp in enumerate(radar_timestamps):
         homMatrix_cart_orb = determine_best_transform(radar_timestamp_idx, radar_timestamp, previous_cart_img, cart_img, homMatrix_cart_orb, car_pos_estimates_cart_orb[-1][2], landmarks)
         newPos = np.matmul(homMatrix_cart_orb, np.array([0, 0, 1]).transpose())
         car_pos_estimates_cart_orb.append([
+            radar_timestamp,
             newPos[0],
             newPos[1],
-            0  # TODO : get angle from homMatrix_cart_orb
+            np.arctan2(homMatrix_cart_orb[1, 0], homMatrix_cart_orb[0, 0])
         ])
 
         homMatrix_polar_orb = determine_best_transform_polar(previous_fft_data, fft_data, homMatrix_polar_orb, azimuths, radar_resolution)
         newPos = np.matmul(homMatrix_polar_orb, np.array([0, 0, 1]).transpose())
         car_pos_estimates_polar_orb.append([
+            radar_timestamp,
             newPos[0],
             newPos[1],
-            0  # TODO : get angle from hom matrix
+            np.arctan2(homMatrix_polar_orb[1, 0], homMatrix_polar_orb[0, 0])
         ])
+
+        with open("odometry_results_with_cart_orb.txt", "w+") as odomFile:
+            for pos in car_pos_estimates_cart_orb:
+                odomFile.writelines([str(pos[0]) + " " + str(pos[1]) + " " + str(pos[2]) + " " + str(pos[3]) + "\n"])
+        with open("odometry_results_with_polar_orb.txt", "w+") as odomFile:
+            for pos in car_pos_estimates_polar_orb:
+                odomFile.writelines([str(pos[0]) + " " + str(pos[1]) + " " + str(pos[2]) + " " + str(pos[3]) + "\n"])
     else:
         # init car_pos_estimates_cart_orb
-        car_pos_estimates_cart_orb.append([car_x, car_y, car_yaw])
-        car_pos_estimates_polar_orb.append([car_x, car_y, car_yaw])
+        car_pos_estimates_cart_orb.append([radar_timestamp, -car_y, car_x, car_yaw])
+        car_pos_estimates_polar_orb.append([radar_timestamp, -car_y, car_x, car_yaw])
     previous_cart_img = cart_img
     previous_fft_data = fft_data
 
-    car_pos.append([car_x, car_y, car_yaw])
+    car_pos.append([radar_timestamp, -car_y, car_x, car_yaw])
 
-    xs, ys, rads = zip(*car_pos)
-    xs_est, ys_est, rads_est = zip(*car_pos_estimates_cart_orb)
-    xs_est_polar, ys_est_polar, rads_est_polar = zip(*car_pos_estimates_polar_orb)
+    _, xs, ys, rads = zip(*car_pos)
+    _, xs_est, ys_est, rads_est = zip(*car_pos_estimates_cart_orb)
+    _, xs_est_polar, ys_est_polar, rads_est_polar = zip(*car_pos_estimates_polar_orb)
     plt.figure(1)
     plt.clf()
     plt.plot(xs, ys, label="Ground truth")
-    plt.plot(ys_est, xs_est, label="Cart Estimation")
-    plt.plot(ys_est_polar, xs_est_polar, label="Polar Estimation")
+    plt.plot(xs_est, ys_est, label="Cart Estimation")
+    plt.plot(xs_est_polar, ys_est_polar, label="Polar Estimation")
     plt.title("Odometry")
     plt.legend()
     plt.ion()
@@ -322,6 +340,7 @@ for radar_timestamp_idx, radar_timestamp in enumerate(radar_timestamps):
     plt.clf()
     plt.plot(np.diff(rads), 'r', label="Ground truth")
     plt.plot(np.diff(rads_est), 'bo', label="Cart Estimation")
+    plt.plot(np.diff(rads_est_polar), 'go', label="Polar Estimation")
     plt.title("Yaw")
     plt.legend()
     plt.ion()
@@ -330,7 +349,8 @@ for radar_timestamp_idx, radar_timestamp in enumerate(radar_timestamps):
     plt.figure(5)
     plt.clf()
     plt.plot(rads, 'r', label="Ground truth")
-    plt.plot(rads_est, 'bo', label="Estimation")
+    plt.plot(rads_est, 'bo', label="Cart Estimation")
+    plt.plot(rads_est_polar, 'go', label="Polar Estimation")
     plt.title("Absolute Yaw")
     plt.legend()
     plt.show()
@@ -338,12 +358,14 @@ for radar_timestamp_idx, radar_timestamp in enumerate(radar_timestamps):
     writeLandmarks(landmarks)
 
 
-xs, ys, rads = zip(*car_pos)
-xs_est, ys_est, rads_est = zip(*car_pos_estimates_cart_orb)
+_, xs, ys, rads = zip(*car_pos)
+_, xs_est, ys_est, rads_est = zip(*car_pos_estimates_cart_orb)
+_, xs_est_polar, ys_est_polar, rads_est_polar = zip(*car_pos_estimates_polar_orb)
 plt.figure(1)
 plt.clf()
 plt.plot(xs, ys, label="Ground truth")
-plt.plot(xs_est, ys_est, label="Estimation")
+plt.plot(xs_est, ys_est, label="Cart Estimation")
+plt.plot(ys_est_polar, xs_est_polar, label="Polar Estimation")
 plt.title("Odometry")
 plt.legend()
 

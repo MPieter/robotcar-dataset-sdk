@@ -103,6 +103,8 @@ def ekf(state, cov, ut, zt, dt, Rtx, Q, dx, dy, dthetha):
     updated_state = update_state(state, ut, dt, dx, dy, dthetha)
     updated_cov = update_cov(state, cov, ut, dt, Rtx)
 
+    updated_state[2] = normalize_angular_value(updated_state[2])
+
     # dbg
     predicted_state = np.copy(updated_state)
     predicted_cov = np.copy(updated_cov)
@@ -137,7 +139,7 @@ def ekf(state, cov, ut, zt, dt, Rtx, Q, dx, dy, dthetha):
 
 
 # EKF Slam Parameters
-N_LANDMARKS = 1000
+N_LANDMARKS = 800
 
 varR = 0.0438 * 2 * 2  # Variance of range measurements of landmarks
 varThetha = 2 * np.deg2rad(10)  # Variance of thetha measurements of landmarks
@@ -156,7 +158,7 @@ odometry = np.loadtxt("odometry_results.txt")
 landmarks = np.loadtxt("landmarks.txt")
 
 # Filter landmarks to only include those with a certain track length
-filtered_landmarks = list(filter(lambda landmark: landmark[7] > 6, landmarks))
+filtered_landmarks = list(filter(lambda landmark: landmark[7] > 2, landmarks))
 landmarks = filtered_landmarks
 
 car_pos = []
