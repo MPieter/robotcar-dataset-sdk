@@ -15,6 +15,16 @@
             ]
         },
         {
+            "name": "Radar ORB Odometry Estimation",
+            "type": "python",
+            "request": "launch",
+            "program": "python/play_radar_odometry_estimation_with_orb.py",
+            "console": "integratedTerminal",
+            "args": [
+                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+            ]
+        },
+        {
             "name": "Radar Occupancy Gridmap",
             "type": "python",
             "request": "launch",
@@ -22,6 +32,46 @@
             "console": "integratedTerminal",
             "args": [
                 "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+            ]
+        },
+        {
+            "name": "Radar EKF",
+            "type": "python",
+            "request": "launch",
+            "program": "python/play_ekf.py",
+            "console": "integratedTerminal",
+            "args": [
+                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+            ]
+        },
+        {
+            "name": "Show results",
+            "type": "python",
+            "request": "launch",
+            "program": "python/show_results.py",
+            "console": "integratedTerminal",
+            "args": [
+                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+            ]
+        },
+        {
+            "name": "play_radar.py",
+            "type": "python",
+            "request": "launch",
+            "program": "python/play_radar.py",
+            "console": "integratedTerminal",
+            "args": [
+                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+            ]
+        },
+        {
+            "name": "play_images.py",
+            "type": "python",
+            "request": "launch",
+            "program": "python/play_images.py",
+            "console": "integratedTerminal",
+            "args": [
+                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/stereo/centre"
             ]
         }
     ]

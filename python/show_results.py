@@ -42,7 +42,7 @@ car_pos_odom_estimates.append([
     odometry[0][0],
     odometry[0][1],
     odometry[0][2],
-    odometry[0][3] + 90 / 180 * np.pi
+    odometry[0][3] + np.pi / 2
 ])
 
 for odomIdx, odom in enumerate(odometry):
@@ -50,18 +50,20 @@ for odomIdx, odom in enumerate(odometry):
         radar_timestamp = odom[0]
         dx = odom[1] - odometry[odomIdx - 1][1]
         dy = odom[2] - odometry[odomIdx - 1][2]
-        dthetha = odom[3] - odometry[odomIdx - 1][3]
+        dthetha = (odom[3] - odometry[odomIdx - 1][3]) * (-1)
         dr = np.sqrt(dx ** 2 + dy ** 2)
         dt = (radar_timestamp - odometry[odomIdx - 1][0]) / 1e6  # Timestamps are in microseconds
 
         ut = np.array([dr / dt, dthetha / dt])
+        vt = ut[0]
+        wt = ut[1]
 
         # Ground truth and analysis
 
         idx = radar_odometry.source_radar_timestamp[radar_odometry.source_radar_timestamp == radar_timestamp].index.tolist()[0]
         curr_radar_odometry = radar_odometry.iloc[idx]
         xyzrpy = np.array([curr_radar_odometry.x, curr_radar_odometry.y, curr_radar_odometry.z,
-                           curr_radar_odometry.roll, curr_radar_odometry.pitch, curr_radar_odometry.yaw])
+                           curr_radar_odometry.roll, curr_radar_odometry.pitch, curr_radar_odometry.yaw * (-1)])
         se3_rel = build_se3_transform(xyzrpy)
         xyzrpy_abs_before = se3_to_components(se3_abs)
         se3_abs = se3_abs * se3_rel
@@ -73,14 +75,14 @@ for odomIdx, odom in enumerate(odometry):
 
         car_pos.append([
             radar_timestamp,
+            -car_y,
             car_x,
-            car_y,
-            car_yaw + 90 / 180 * np.pi
+            car_yaw
         ])
         car_pos_odom_estimates.append([
             radar_timestamp,
-            car_pos_odom_estimates[-1][1] + dx,
-            car_pos_odom_estimates[-1][2] + dy,
+            car_pos_odom_estimates[-1][1] + np.cos(car_pos_odom_estimates[-1][3] + wt * dt) * vt * dt,
+            car_pos_odom_estimates[-1][2] + np.sin(car_pos_odom_estimates[-1][3] + wt * dt) * vt * dt,
             car_pos_odom_estimates[-1][3] + dthetha
         ])
 
