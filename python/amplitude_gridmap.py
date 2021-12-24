@@ -84,8 +84,8 @@ class AmplitudeGridmap:
                 # if subset.size > 4:
                     # print("found subset in cart_img bigger then 4, actual size is " + str(subset.size))
                 # print(subset.size)
-                percentile = np.percentile(subset, 80)
-                subset = subset[subset > percentile]
+                # percentile = np.percentile(subset, 80)
+                # subset = subset[subset > percentile]
 
                 del_subset = np.delete(subset, np.where(subset == 0))
                 if del_subset.size == 0:

@@ -90,12 +90,13 @@ def plot_peaks(cart_img, fft_data, azimuths, radar_resolution):
                            thickness=2,
                            line_type=cv2.LINE_AA)
 
-    cv2.imshow("Cart img", cart_img_with_peaks)
+    cv2.imshow("Radar image", cart_img)
+    cv2.imshow("Radar image with peaks", cart_img_with_peaks)
 
     mask = skimage.draw.polygon2mask(cart_img_with_peaks.shape, keypoints)
     mask = mask.astype(np.uint8)
     mask *= 255
-    cv2.imshow("Polygon mask", mask)
+    cv2.imshow("Radar mask", mask)
 
     cv2.waitKey(1)
 
@@ -130,7 +131,7 @@ for radar_timestamp in radar_timestamps:
     cart_img = radar_polar_to_cartesian(azimuths, fft_data, radar_resolution, cart_resolution, cart_pixel_width,
                                         interpolate_crossover)
     cart_img = cart_img / np.max(cart_img)
-    # plot_peaks(cart_img, fft_data, azimuths, radar_resolution)
+    plot_peaks(cart_img, fft_data, azimuths, radar_resolution)
     inv_sensor_model_mask = get_inverse_sensor_model_mask(cart_img, fft_data, azimuths, radar_resolution)
 
     # Combine polar and cartesian for visualisation

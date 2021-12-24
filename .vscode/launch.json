@@ -11,7 +11,7 @@
             "program": "python/play_radar_odometry_estimation.py",
             "console": "integratedTerminal",
             "args": [
-                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+                "/Users/pieter/Downloads/oxford_data/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
             ]
         },
         {
@@ -21,7 +21,7 @@
             "program": "python/play_radar_odometry_estimation_with_orb.py",
             "console": "integratedTerminal",
             "args": [
-                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+                "/Users/pieter/Downloads/oxford_data/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
             ]
         },
         {
@@ -31,7 +31,7 @@
             "program": "python/play_radar_occupancy_gridmap.py",
             "console": "integratedTerminal",
             "args": [
-                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+                "/Users/pieter/Downloads/oxford_data/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
             ]
         },
         {
@@ -41,7 +41,7 @@
             "program": "python/play_ekf.py",
             "console": "integratedTerminal",
             "args": [
-                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+                "/Users/pieter/Downloads/oxford_data/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
             ]
         },
         {
@@ -51,7 +51,7 @@
             "program": "python/show_results.py",
             "console": "integratedTerminal",
             "args": [
-                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+                "/Users/pieter/Downloads/oxford_data/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
             ]
         },
         {
@@ -61,7 +61,7 @@
             "program": "python/play_radar.py",
             "console": "integratedTerminal",
             "args": [
-                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
+                "/Users/pieter/Downloads/oxford_data/2019-01-10-14-36-48-radar-oxford-10k-partial-3/radar"
             ]
         },
         {
@@ -71,7 +71,7 @@
             "program": "python/play_images.py",
             "console": "integratedTerminal",
             "args": [
-                "/Users/pieter/Downloads/2019-01-10-14-36-48-radar-oxford-10k-partial-3/stereo/centre"
+                "/Users/pieter/Downloads/oxford_data/2019-01-10-14-36-48-radar-oxford-10k-partial-3/stereo/centre"
             ]
         }
     ]

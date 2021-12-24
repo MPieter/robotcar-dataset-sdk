@@ -57,4 +57,4 @@ for radar_timestamp in radar_timestamps:
     vis = cv2.hconcat((fft_data_vis, fft_data_vis[:, :10] * 0 + 1, cart_img))
 
     cv2.imshow(title, vis * 2.)  # The data is doubled to improve visualisation
-    cv2.waitKey(1)
+    cv2.waitKey(0)

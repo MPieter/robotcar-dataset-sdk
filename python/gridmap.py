@@ -103,7 +103,7 @@ def updateGridMap(gridmap, car_x, car_y, car_yaw, cart_img, inv_sensor_model_mas
                 continue  # This part of the occupancy map is not in the current radar frame
             # if subset.size > 4:
                 # print("found subset in cart_img bigger then 4, actual size is " + str(subset.size))
-            percentile = np.percentile(subset, 20)
+            percentile = np.percentile(subset, 80)
             subset = subset[subset > percentile]
 
             del_subset = np.delete(subset, np.where(subset == 0))

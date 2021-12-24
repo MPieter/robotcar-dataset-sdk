@@ -71,17 +71,29 @@ def update_cov(state, cov, ut, dt, Rtx):
     return Gt @ cov @ np.transpose(Gt) + np.transpose(Fx) @ Rtx @ Fx
 
 
-def kalman_gain(updated_cov, Q, landmarkIdx, delta, q):
-    lowHi = np.array([
-        [-np.sqrt(q) * delta[0], -np.sqrt(q) * delta[1], 0, np.sqrt(q) * delta[0], np.sqrt(q) * delta[1]],
-        [delta[1], -delta[0], -q, -delta[1], delta[0]]])
-    lowHi = np.divide(lowHi, q)
-    Fxj = np.zeros((5, updated_cov.shape[0]))
+def kalman_gain(updated_state, updated_cov, Q, zt):
+    Fxj = np.zeros(3 + len(zt) * 2, updated_cov.shape[0])
     Fxj[0, 0] = 1
     Fxj[1, 1] = 1
     Fxj[2, 2] = 1
-    Fxj[3, 3 + landmarkIdx * 2] = 1
-    Fxj[4, 3 + landmarkIdx * 2 + 1] = 1
+
+    for obs_idx, obs_t in zt:
+        landmarkNew = obs_t[0]
+        landmarkIdx = obs_t[1]
+        landmark_r = obs_t[2]
+        landmark_thetha = (obs_t[3] + np.pi / 2) * (-1)
+
+        delta = np.array([updated_state[3 + landmarkIdx * 2] - updated_state[0],
+                          updated_state[3 + landmarkIdx * 2 + 1] - updated_state[1]]).transpose()
+        q = np.transpose(delta) @ delta
+
+        lowHi = np.array([
+            [-np.sqrt(q) * delta[0], -np.sqrt(q) * delta[1], 0, np.sqrt(q) * delta[0], np.sqrt(q) * delta[1]],
+            [delta[1], -delta[0], -q, -delta[1], delta[0]]])
+        lowHi = np.divide(lowHi, q)
+
+        Fxj[3 + obs_idx * 2, 3 + landmarkIdx * 2] = 1
+        Fxj[4 + obs_idx * 2, 3 + landmarkIdx * 2 + 1] = 1
     Hi = lowHi @ Fxj
     return updated_cov @ np.transpose(Hi) @ numpy.linalg.inv(Hi @ updated_cov @ np.transpose(Hi) + Q), Hi
 
@@ -131,10 +143,10 @@ def ekf(state, cov, ut, zt, dt, Rtx, Q, dx, dy, dthetha):
         diff_obs[1] = normalize_angular_value(diff_obs[1])
 
         # Get kalman gain for this observation
-        Ki, Hi = kalman_gain(updated_cov, Q, landmarkIdx, delta, q)
-        updated_state = updated_state + Ki @ diff_obs
+        K, H = kalman_gain(updated_state, updated_cov, Q, zt)
+        updated_state = updated_state + K @ diff_obs
         updated_state[2] = normalize_angular_value(updated_state[2])
-        updated_cov = (np.identity(updated_cov.shape[0]) - Ki @ Hi) @ updated_cov
+        updated_cov = (np.identity(updated_cov.shape[0]) - K @ H) @ updated_cov
     return predicted_state, updated_state, updated_cov
 
 
